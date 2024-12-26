@@ -28,6 +28,7 @@ func main() {
 	// products routes under /products
 	products := r.Group("/products")
 	products.Use(middlewares.RequireAuth)
+	products.Use(middlewares.RequireAdmin()) // only admin can access these routes
 	{
 		products.POST("/", controllers.CreateProduct)
 		products.GET("/", controllers.GetProducts)

@@ -39,7 +39,6 @@ type PaginationMeta struct {
 	TotalPages  int   `json:"total_pages"`
 }
 
-// CreateProduct creates a new product
 func CreateProduct(c *gin.Context) {
 	var input CreateProductInput
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -75,7 +74,6 @@ func CreateProduct(c *gin.Context) {
 	})
 }
 
-// GetProducts retrieves products with filtering and pagination
 func GetProducts(c *gin.Context) {
 	// Parse query parameters
 	name := c.Query("name")
@@ -151,7 +149,6 @@ func GetProducts(c *gin.Context) {
 	})
 }
 
-// UpdateProduct updates an existing product
 func UpdateProduct(c *gin.Context) {
 	id := c.Param("id")
 
@@ -213,7 +210,6 @@ func UpdateProduct(c *gin.Context) {
 	})
 }
 
-// DeleteProduct soft deletes a product
 func DeleteProduct(c *gin.Context) {
 	id := c.Param("id")
 
@@ -249,7 +245,6 @@ func DeleteProduct(c *gin.Context) {
 	})
 }
 
-// GetProduct retrieves a single product by ID
 func GetProduct(c *gin.Context) {
 	id := c.Param("id")
 
