@@ -13,9 +13,6 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// SignUp is a function that creates a new user
-// it takes a gin context as a parameter
-// it returns a JSON response with a message and a status code
 func SignUp(c *gin.Context) {
 
 	var body struct {

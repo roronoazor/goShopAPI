@@ -29,7 +29,11 @@ func main() {
 	products := r.Group("/products")
 	products.Use(middlewares.RequireAuth)
 	{
+		products.POST("/", controllers.CreateProduct)
 		products.GET("/", controllers.GetProducts)
+		products.GET("/:id", controllers.GetProduct)
+		products.PUT("/:id", controllers.UpdateProduct)
+		products.DELETE("/:id", controllers.DeleteProduct)
 	}
 
 	// Custom 404 handler

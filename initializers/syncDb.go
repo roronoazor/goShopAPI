@@ -1,7 +1,23 @@
 package initializers
 
-import "github.com/roronoazor/goShopAPI/models"
+import (
+	"log"
+
+	"github.com/roronoazor/goShopAPI/models"
+)
 
 func SyncDb() {
-	DB.AutoMigrate(&models.User{})
+	// Add all your models here
+	err := DB.AutoMigrate(
+		&models.User{},
+		&models.Product{},
+		&models.Order{},
+		&models.OrderItem{},
+	)
+
+	if err != nil {
+		log.Fatal("Failed to sync database:", err)
+	}
+
+	log.Println("Database synced successfully")
 }
