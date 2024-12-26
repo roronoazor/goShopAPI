@@ -11,6 +11,7 @@ const (
 
 type User struct {
 	gorm.Model
+	ID       uint     `gorm:"primarykey;autoIncrement:true;sequence:users_id_seq"`
 	Username string   `json:"username" gorm:"unique"`
 	Email    string   `json:"email" gorm:"unique"`
 	Password string   `json:"password"`

@@ -16,6 +16,8 @@ const (
 
 type Order struct {
 	gorm.Model
+
+	ID          uint        `gorm:"primarykey;autoIncrement:true;sequence:orders_id_seq"`
 	UserID      uint        `json:"user_id" gorm:"not null"`
 	User        User        `json:"user"`
 	Status      OrderStatus `json:"status" gorm:"type:varchar(20);default:'pending'"`

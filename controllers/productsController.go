@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/roronoazor/goShopAPI/initializers"
+	"github.com/roronoazor/goShopAPI/libs"
 	"github.com/roronoazor/goShopAPI/models"
 	"gorm.io/gorm"
 )
@@ -26,17 +27,10 @@ type UpdateProductInput struct {
 }
 
 type ProductResponse struct {
-	Status     string          `json:"status"`
-	Message    string          `json:"message"`
-	Data       interface{}     `json:"data"`
-	Pagination *PaginationMeta `json:"pagination,omitempty"`
-}
-
-type PaginationMeta struct {
-	CurrentPage int   `json:"current_page"`
-	PageSize    int   `json:"page_size"`
-	TotalItems  int64 `json:"total_items"`
-	TotalPages  int   `json:"total_pages"`
+	Status     string               `json:"status"`
+	Message    string               `json:"message"`
+	Data       interface{}          `json:"data"`
+	Pagination *libs.PaginationMeta `json:"pagination,omitempty"`
 }
 
 func CreateProduct(c *gin.Context) {
@@ -140,7 +134,7 @@ func GetProducts(c *gin.Context) {
 		Status:  "success",
 		Message: "Products retrieved successfully",
 		Data:    products,
-		Pagination: &PaginationMeta{
+		Pagination: &libs.PaginationMeta{
 			CurrentPage: page,
 			PageSize:    pageSize,
 			TotalItems:  total,

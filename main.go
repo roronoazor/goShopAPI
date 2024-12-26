@@ -28,13 +28,30 @@ func main() {
 	// products routes under /products
 	products := r.Group("/products")
 	products.Use(middlewares.RequireAuth)
-	products.Use(middlewares.RequireAdmin()) // only admin can access these routes
+	//products.Use(middlewares.RequireAdmin()) // only admin can access these routes
 	{
 		products.POST("/", controllers.CreateProduct)
 		products.GET("/", controllers.GetProducts)
 		products.GET("/:id", controllers.GetProduct)
 		products.PUT("/:id", controllers.UpdateProduct)
 		products.DELETE("/:id", controllers.DeleteProduct)
+	}
+
+	// Order routes
+	orders := r.Group("/orders")
+	orders.Use(middlewares.RequireAuth)
+	{
+		orders.POST("/", controllers.CreateOrder)
+		orders.GET("/", controllers.GetUserOrders)
+		orders.GET("/:id", controllers.GetOrder) // Add this line
+		orders.POST("/:id/cancel", controllers.CancelOrder)
+
+		// Admin only routes
+		admin := orders.Group("/")
+		admin.Use(middlewares.RequireAdmin())
+		{
+			admin.PUT("/:id/status", controllers.UpdateOrderStatus)
+		}
 	}
 
 	// Custom 404 handler
