@@ -3,10 +3,12 @@ package controllers
 import (
 	"fmt"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/roronoazor/goShopAPI/initializers"
+	"github.com/roronoazor/goShopAPI/libs"
 	"github.com/roronoazor/goShopAPI/models"
 	"gorm.io/gorm"
 )
@@ -30,17 +32,6 @@ type OrderResponse struct {
 	Items       []models.OrderItem `json:"items"`
 }
 
-// @Summary Create a new order
-// @Description Place an order for one or more products
-// @Tags orders
-// @Accept json
-// @Produce json
-// @Param order body CreateOrderInput true "Order details"
-// @Success 201 {object} models.Order
-// @Failure 400 {object} ErrorResponse
-// @Failure 401 {object} ErrorResponse
-// @Router /orders [post]
-// @Security Bearer
 func CreateOrder(c *gin.Context) {
 	var input CreateOrderInput
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -183,32 +174,44 @@ func CreateOrder(c *gin.Context) {
 	})
 }
 
-// @Summary Get user orders
-// @Description Get all orders for the authenticated user
-// @Tags orders
-// @Produce json
-// @Param page query int false "Page number"
-// @Param page_size query int false "Page size"
-// @Success 200 {array} models.Order
-// @Failure 401 {object} ErrorResponse
-// @Router /orders [get]
-// @Security Bearer
 func GetUserOrders(c *gin.Context) {
 	user, _ := c.Get("user")
 	currentUser := user.(models.User)
+
+	// Get pagination parameters from query
+	page, err := strconv.Atoi(c.DefaultQuery("page", "1"))
+	if err != nil || page < 1 {
+		page = 1
+	}
+
+	pageSize, err := strconv.Atoi(c.DefaultQuery("page_size", "10"))
+	if err != nil || pageSize < 1 {
+		pageSize = 10
+	}
+
+	// Cap maximum page size
+	if pageSize > 100 {
+		pageSize = 100
+	}
 
 	var orders []models.Order
 	query := initializers.DB.Where("user_id = ?", currentUser.ID).
 		Preload("Items.Product").
 		Order("created_at DESC")
 
-	// Add pagination
-	page := 1
-	pageSize := 10
 	var total int64
-
 	query.Model(&models.Order{}).Count(&total)
-	query.Offset((page - 1) * pageSize).Limit(pageSize).Find(&orders)
+
+	// Calculate offset and fetch paginated results
+	offset := (page - 1) * pageSize
+	result := query.Offset(offset).Limit(pageSize).Find(&orders)
+	if result.Error != nil {
+		c.JSON(http.StatusInternalServerError, ProductResponse{
+			Status:  "error",
+			Message: "Failed to fetch orders",
+		})
+		return
+	}
 
 	var orderResponses []OrderResponse
 	for _, order := range orders {
@@ -222,30 +225,21 @@ func GetUserOrders(c *gin.Context) {
 		})
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"status":  "success",
-		"message": "Orders retrieved successfully",
-		"data":    orderResponses,
-		"meta": gin.H{
-			"current_page": page,
-			"page_size":    pageSize,
-			"total_items":  total,
-			"total_pages":  (total + int64(pageSize) - 1) / int64(pageSize),
+	totalPages := int((total + int64(pageSize) - 1) / int64(pageSize))
+
+	c.JSON(http.StatusOK, ProductResponse{
+		Status:  "success",
+		Message: "Orders retrieved successfully",
+		Data:    orderResponses,
+		Pagination: &libs.PaginationMeta{
+			CurrentPage: page,
+			PageSize:    pageSize,
+			TotalItems:  total,
+			TotalPages:  totalPages,
 		},
 	})
 }
 
-// @Summary Cancel order
-// @Description Cancel an order if it's still in pending status
-// @Tags orders
-// @Produce json
-// @Param id path int true "Order ID"
-// @Success 200 {object} models.Order
-// @Failure 400 {object} ErrorResponse
-// @Failure 401 {object} ErrorResponse
-// @Failure 403 {object} ErrorResponse
-// @Router /orders/{id}/cancel [post]
-// @Security Bearer
 func CancelOrder(c *gin.Context) {
 	user, _ := c.Get("user")
 	currentUser := user.(models.User)
@@ -303,65 +297,79 @@ func CancelOrder(c *gin.Context) {
 	})
 }
 
-// @Summary Update order status
-// @Description Update order status (admin only)
-// @Tags orders
-// @Accept json
-// @Produce json
-// @Param id path int true "Order ID"
-// @Param status body string true "New status"
-// @Success 200 {object} models.Order
-// @Failure 400 {object} ErrorResponse
-// @Failure 401 {object} ErrorResponse
-// @Failure 403 {object} ErrorResponse
-// @Router /orders/{id}/status [put]
-// @Security Bearer
 func UpdateOrderStatus(c *gin.Context) {
 	var input struct {
 		Status models.OrderStatus `json:"status" binding:"required"`
 	}
 
 	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, ProductResponse{
+			Status:  "error",
+			Message: "Invalid input",
+			Data:    libs.NewValidationError(err),
+		})
+		return
+	}
+
+	// Validate status value
+	if !input.Status.IsValid() {
+		c.JSON(http.StatusBadRequest, ProductResponse{
+			Status:  "error",
+			Message: "Invalid order status",
+			Data: []libs.ValidationError{{
+				Field:   "status",
+				Message: "Invalid status: must be one of [pending, processing, shipped, delivered, cancelled]",
+			}},
+		})
 		return
 	}
 
 	var order models.Order
 	if err := initializers.DB.Preload("Items.Product").First(&order, c.Param("id")).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Order not found"})
+			c.JSON(http.StatusNotFound, ProductResponse{
+				Status:  "error",
+				Message: "Order not found",
+			})
 		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch order"})
+			c.JSON(http.StatusInternalServerError, ProductResponse{
+				Status:  "error",
+				Message: "Failed to fetch order",
+			})
 		}
+		return
+	}
+
+	// Validate status transition
+	if err := order.Status.ValidateTransition(input.Status); err != nil {
+		c.JSON(http.StatusBadRequest, ProductResponse{
+			Status:  "error",
+			Message: "Invalid status transition",
+			Data: []libs.ValidationError{{
+				Field:   "status",
+				Message: err.Error(),
+			}},
+		})
 		return
 	}
 
 	// Update status
 	order.Status = input.Status
 	if err := initializers.DB.Save(&order).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update order status"})
+		c.JSON(http.StatusInternalServerError, ProductResponse{
+			Status:  "error",
+			Message: "Failed to update order status",
+		})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"status":  "success",
-		"message": "Order status updated successfully",
-		"data":    order,
+	c.JSON(http.StatusOK, ProductResponse{
+		Status:  "success",
+		Message: "Order status updated successfully",
+		Data:    order,
 	})
 }
 
-// GetOrder retrieves a single order
-// @Summary Get order details
-// @Description Get details of a specific order
-// @Tags orders
-// @Produce json
-// @Param id path int true "Order ID"
-// @Success 200 {object} OrderResponse
-// @Failure 404 {object} ErrorResponse
-// @Failure 401 {object} ErrorResponse
-// @Failure 403 {object} ErrorResponse
-// @Router /orders/{id} [get]
-// @Security Bearer
 func GetOrder(c *gin.Context) {
 	// Get current user from context
 	user, _ := c.Get("user")

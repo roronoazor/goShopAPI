@@ -2,8 +2,7 @@ package models
 
 import (
 	"fmt"
-
-	"gorm.io/gorm"
+	"time"
 )
 
 type UserRole string
@@ -34,12 +33,15 @@ func (r UserRole) ValidateForSignup() error {
 }
 
 type User struct {
-	gorm.Model
-	ID       uint     `gorm:"primarykey;autoIncrement:true;sequence:users_id_seq" json:"id"`
-	Username string   `json:"username" gorm:"unique"`
-	Email    string   `json:"email" gorm:"unique"`
-	Password string   `json:"password"`
-	Role     UserRole `json:"role" gorm:"type:varchar(20);default:'customer'"`
+	CreatedAt time.Time  `json:"created_at"`
+	UpdatedAt time.Time  `json:"updated_at"`
+	DeletedAt *time.Time `json:"deleted_at,omitempty" gorm:"index"`
+	ID        uint       `gorm:"primarykey;autoIncrement:true;sequence:users_id_seq" json:"id"`
+	Username  string     `json:"username" gorm:"unique"`
+	Email     string     `json:"email" gorm:"unique"`
+	Password  string     `json:"-"` // Hide from JSON responses
+	Role      UserRole   `json:"role" gorm:"type:varchar(20);default:'customer'"`
+
 	// we can add more fields here like first name, last name, phone number, etc
 	// but we will keep it simple for now
 }
