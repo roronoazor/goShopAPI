@@ -14,15 +14,32 @@ import (
 )
 
 func SignUp(c *gin.Context) {
-
 	var body struct {
-		Username string `json:"username" binding:"required"`
-		Email    string `json:"email" binding:"required,email"`
-		Password string `json:"password" binding:"required"`
+		Username string          `json:"username" binding:"required"`
+		Email    string          `json:"email" binding:"required,email"`
+		Password string          `json:"password" binding:"required"`
+		Role     models.UserRole `json:"role"`
 	}
 
 	if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(http.StatusBadRequest, libs.NewValidationError(err))
+		c.JSON(http.StatusBadRequest, ProductResponse{
+			Status:  "error",
+			Message: "Invalid input",
+			Data:    libs.NewValidationError(err),
+		})
+		return
+	}
+
+	// Validate role
+	if err := body.Role.ValidateForSignup(); err != nil {
+		c.JSON(http.StatusBadRequest, ProductResponse{
+			Status:  "error",
+			Message: "Invalid role",
+			Data: []libs.ValidationError{{
+				Field:   "role",
+				Message: err.Error(),
+			}},
+		})
 		return
 	}
 
@@ -62,10 +79,10 @@ func SignUp(c *gin.Context) {
 				})
 			}
 
-			c.JSON(http.StatusBadRequest, libs.ErrorResponse{
+			c.JSON(http.StatusBadRequest, ProductResponse{
 				Status:  "error",
 				Message: "Password validation failed",
-				Errors:  errors,
+				Data:    errors,
 			})
 			return
 		}
@@ -74,43 +91,37 @@ func SignUp(c *gin.Context) {
 	// Check for existing username
 	var existingUser models.User
 	if result := initializers.DB.Where("username = ?", body.Username).First(&existingUser); result.Error == nil {
-		c.JSON(http.StatusConflict, libs.ErrorResponse{
+		c.JSON(http.StatusConflict, ProductResponse{
 			Status:  "error",
 			Message: "Registration failed",
-			Errors: []libs.ValidationError{
-				{
-					Field:   "username",
-					Message: "This username is already taken",
-				},
-			},
+			Data: []libs.ValidationError{{
+				Field:   "username",
+				Message: "This username is already taken",
+			}},
 		})
 		return
 	}
 
 	// Check for existing email
 	if result := initializers.DB.Where("email = ?", body.Email).First(&existingUser); result.Error == nil {
-		c.JSON(http.StatusConflict, libs.ErrorResponse{
+		c.JSON(http.StatusConflict, ProductResponse{
 			Status:  "error",
 			Message: "Registration failed",
-			Errors: []libs.ValidationError{
-				{
-					Field:   "email",
-					Message: "This email is already registered",
-				},
-			},
+			Data: []libs.ValidationError{{
+				Field:   "email",
+				Message: "This email is already registered",
+			}},
 		})
 		return
 	}
 
-	// hash the password
+	// Hash password and create user
 	hash, err := bcrypt.GenerateFromPassword([]byte(body.Password), 10)
 	if err != nil {
-		// log the error
 		log.Println("Failed to hash password", err)
-
-		// return an error message
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "An error occurred, please contact support",
+		c.JSON(http.StatusInternalServerError, ProductResponse{
+			Status:  "error",
+			Message: "An error occurred, please contact support",
 		})
 		return
 	}
@@ -119,78 +130,79 @@ func SignUp(c *gin.Context) {
 		Username: body.Username,
 		Email:    body.Email,
 		Password: string(hash),
+		Role:     models.UserRole(body.Role),
 	}
-	result := initializers.DB.Create(&user)
-	if result.Error != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "An error occurred, please contact support",
+
+	if result := initializers.DB.Create(&user); result.Error != nil {
+		c.JSON(http.StatusInternalServerError, ProductResponse{
+			Status:  "error",
+			Message: "Failed to create user",
 		})
 		return
 	}
 
 	tokenResponse, err := services.GenerateToken(user)
-
 	if err != nil {
-
 		log.Println("Failed to generate token", err)
-
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "Failed to create user, please contact support",
+		c.JSON(http.StatusInternalServerError, ProductResponse{
+			Status:  "error",
+			Message: "Failed to create user",
 		})
 		return
 	}
 
-	c.JSON(http.StatusOK, tokenResponse)
-
+	c.JSON(http.StatusOK, ProductResponse{
+		Status:  "success",
+		Message: "User registered successfully",
+		Data:    tokenResponse,
+	})
 }
 
 func Login(c *gin.Context) {
-	// Get email and password from body
 	var body struct {
 		Email    string `json:"email" binding:"required,email"`
 		Password string `json:"password" binding:"required"`
 	}
 
 	if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(http.StatusBadRequest, libs.NewValidationError(err))
+		c.JSON(http.StatusBadRequest, ProductResponse{
+			Status:  "error",
+			Message: "Invalid input",
+			Data:    libs.NewValidationError(err),
+		})
 		return
 	}
 
 	var user models.User
-	initializers.DB.First(&user, "email = ?", body.Email)
-
-	if user.ID == 0 {
-		c.JSON(http.StatusBadRequest, libs.ErrorResponse{
+	if result := initializers.DB.First(&user, "email = ?", body.Email); result.Error != nil {
+		c.JSON(http.StatusBadRequest, ProductResponse{
 			Status:  "error",
-			Message: "Invalid Credentials",
+			Message: "Invalid credentials",
 		})
 		return
 	}
 
-	err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(body.Password))
-
-	if err != nil {
-		c.JSON(http.StatusBadRequest, libs.ErrorResponse{
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(body.Password)); err != nil {
+		c.JSON(http.StatusBadRequest, ProductResponse{
 			Status:  "error",
-			Message: "Invalid Credentials",
+			Message: "Invalid credentials",
 		})
 		return
 	}
 
-	// generate and return a jwt token
 	tokenResponse, err := services.GenerateToken(user)
-
 	if err != nil {
-
 		log.Println("Failed to generate token", err)
-
-		c.JSON(http.StatusInternalServerError, libs.ErrorResponse{
+		c.JSON(http.StatusInternalServerError, ProductResponse{
 			Status:  "error",
 			Message: "Failed to authenticate user",
 		})
 		return
 	}
 
-	c.JSON(http.StatusOK, tokenResponse)
-
+	c.JSON(http.StatusOK, ProductResponse{
+		Status:  "success",
+		Message: "Login successful",
+		Data:    tokenResponse,
+	})
 }
