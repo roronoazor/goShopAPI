@@ -43,38 +43,6 @@ A simple e-commerce REST API built with Go, Gin and GORM.
 - `POST /orders/:id/cancel` - Cancel order (Auth required)
 - `PUT /orders/:id/status` - Update order status (Admin only)
 
-## Project Structure
-
-├── controllers/
-│ ├── usersController.go
-│ ├── productsController.go
-│ └── ordersController.go
-├── models/
-│ ├── userModel.go
-│ ├── productModel.go
-│ └── orderModel.go
-├── initializers/
-│ └── connectToDb.go
-| |** loadEnvVariables.go
-| |** syncDb.go
-├── middlewares/
-│ └── requireAuth.go
-| |** requireAdmin.go
-├── validators/
-│ └── password.go
-├── services/
-│ └── usersService.go
-└── libs/
-│ └── errors.go
-│ └── response.go
-└── main.go
-|** .env
-|** .env.example
-|** .gitignore
-|** go.mod
-|** go.sum
-|\_\_ README.md
-
 ## Potential Improvements
 
 Given that this was a simple project, there are many potential improvements that could be made:
@@ -112,6 +80,6 @@ Given that this was a simple project, there are many potential improvements that
 
 6. Use Postman or curl to test the API endpoints
 
-7. API Documentation
+7. API Documentation on postman
 
-->
+[https://documenter.getpostman.com/view/8282612/2sAYJ6BenE](https://documenter.getpostman.com/view/8282612/2sAYJ6BenE)
